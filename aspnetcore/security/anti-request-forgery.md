@@ -17,55 +17,55 @@ ms.lasthandoff: 11/10/2017
 ---
 # <a name="preventing-cross-site-request-forgery-xsrfcsrf-attacks-in-aspnet-core"></a>Impedire attacchi di tipo Cross-Site Request Forgery (XSRF/CSRF) in ASP.NET Core
 
-[Steve Smith](https://ardalis.com/), [Fiyaz Hasan](https://twitter.com/FiyazBinHasan), e [Rick Anderson](https://twitter.com/RickAndMSFT)
+[Steve Smith](https://ardalis.com/), [Fiyaz Hasan](https://twitter.com/FiyazBinHasan), [Rick Anderson](https://twitter.com/RickAndMSFT) e [Moreno Gentili](https://twitter.com/GentiliMoreno)
 
-## <a name="what-attack-does-anti-forgery-prevent"></a>Quali attacco impedire antifalsificazione?
+## <a name="what-attack-does-anti-forgery-prevent"></a>Quale attacco previene l'Anti-Forgery?
 
-Richieste intersito false (noto anche come XSRF o CSRF, pronuncia *tra superfici vedere*) è un attacco contro applicazioni ospitate da web in base al quale un sito web in grado di influenzare l'interazione tra un browser del client e un sito web che considera attendibile tale browser. Questi attacchi sono possibili in quanto web browser invia alcuni tipi di token di autenticazione automaticamente con ogni richiesta a un sito web. Questo tipo di attacco è noto anche come un *attacco con un clic* o come *sessione riding*, perché l'attacco sfrutta i vantaggi dell'utente dell'autenticazione in precedenza sessione.
+Cross-site request forgery (noto anche come XSRF o CSRF, pronunciato *see-surf*) è un attacco rivolto ad un'applicazione web da parte di siti web terzi che sfruttano l'attendibilità esistente tra il browser dell'utente e tale applicazione web. Questi attacchi sono possibili in quanto il browser invia automaticamente alcuni tipi di token di autenticazione (ad esempio i cookie) ad ogni orichiesta rivolta all'applicazione web. Questo tipo di attacco è noto anche come *one-click attack* o come *session riding*, perché l'attacco sfrutta la sessione autenticata stabilita in precedenza dall'utente.
 
-Un esempio di un attacco di tipo CSRF:
+Un esempio di attacco CSRF:
 
-1. Un utente accede a `www.example.com`, con autenticazione basata su form.
-2. Il server autentica l'utente e invia una risposta che include un cookie di autenticazione.
-3. L'utente visita un sito dannoso.
+1. Un utente accede a `www.example.com`, con autenticazione basata su form;
+2. Il server autentica l'utente e invia una risposta che include un cookie di autenticazione;
+3. L'utente visita un sito dannoso:
 
    Il sito dannoso contiene un form HTML simile al seguente:
 
 ```html
-   <h1>You Are a Winner!</h1>
-     <form action="http://example.com/api/account" method="post">
-       <input type="hidden" name="Transaction" value="withdraw" />
-       <input type="hidden" name="Amount" value="1000000" />
-     <input type="submit" value="Click Me"/>
+   <h1>Congratulazioni, hai vinto!</h1>
+     <form action="http://example.com/api/ContoCorrente" method="post">
+       <input type="hidden" name="Azione" value="InviaBonifico" />
+       <input type="hidden" name="IbanDestinatario" value="XX99X0999999999999999999999" />
+       <input type="hidden" name="Importo" value="1000000" />
+     <input type="submit" value="Clicca subito per ottenere il premio"/>
    </form>
 ```
 
-Si noti che le azioni form invia al sito vulnerabile, non per il sito dannoso. Questa è la parte "cross-site" di CSRF.
+Si noti che l'action del form è rivolta all'applicazione web vulnerabile, non al sito dannoso che contiene il form. Questa è la parte "cross-site" di CSRF.
 
-4. L'utente fa clic sul pulsante Invia. Il visualizzatore include automaticamente il cookie di autenticazione per il dominio richiesto (sito vulnerabile in questo caso) con la richiesta.
-5. La richiesta viene eseguito nel server con il contesto di autenticazione dell'utente e può eseguire qualsiasi operazione che è consentito un utente autenticato.
+4. L'utente fa clic sul pulsante. Nell'inviare la richiesta, il browser include automaticamente il cookie di autenticazione per il dominio example.com che ospita l'applicazione web vulnerabile;
+5. La richiesta viene elaborata dal server con i privilegi dell'utente e può quindi eseguire qualsiasi operazione per suo conto, dato che si era autenticato in precedenza.
 
-In questo esempio richiede all'utente di fare clic sul pulsante del form. La pagina è possibile:
+In questo esempio l'utente è stato attirato a cliccare il bottone di un form, ma un attacco CSFR è anche possibile in questi modi:
 
-* Eseguire uno script che invia automaticamente il form.
-* Invia l'invio di un form come una richiesta AJAX. 
-* Utilizzare un form nascosto con CSS. 
+* Tramite esecuzione di uno script che invia automaticamente il form, senza che sia necessario alcun click. Il form può essere nascosto nella pagina grazie a regole di stile CSS;
+* Invio dei dati tramite una richiesta Ajax. Anch'essa non richiede click ma presuppone che il server non esponga opportune regole CORS.
 
-Utilizzo di SSL non impedisce un attacco di tipo CSRF, il sito dannoso può inviare un `https://` richiesta. 
+L'utilizzo di SSL non impedisce gli attacchi CSRF, dato che il sito dannoso può inviare richieste ad indirizzi `https://`. 
 
-Alcuni attacchi di destinazione gli endpoint del sito che rispondono alle `GET` richieste, in cui un tag di immagine case consente di eseguire l'azione (questa forma di attacco è comune nei siti di forum che consentono di immagini ma bloccare JavaScript). Le applicazioni che modificano lo stato con `GET` richieste sono vulnerabili da attacchi dannosi.
+Alcuni attacchi possono essere portati mediante richiesta `GET`, semplicemente usando l'indirizzo dell'applicazione web vulnerabile nell'attributo *src* di un tag *img* (questa forma di attacco è comune nei forum di discussione che bloccano il JavaScript ma che consentono di inserire immagini). Se l'applicazione web espone via `GET` delle operazioni che modificano lo stato, allora è particolarmente vulnerabile ad attacchi dannosi.
 
-Attacchi CSRF sono possibili contro i siti web che usano i cookie per l'autenticazione, in quanto browser invia tutti i cookie pertinenti al sito web di destinazione. Tuttavia, gli attacchi CSRF non sono limitati per sfruttare i cookie. Ad esempio, l'autenticazione di base e classificata sono anche vulnerabili. Dopo che un utente accede con l'autenticazione di base o Digest, il browser invia automaticamente le credenziali, fino al termine della sessione.
+Gli attacchi CSRF sono possibili contro i siti web che usano i cookie di autenticazione, in quanto il browser invia tutti i cookie pertinenti al dominio che ospita l'applicazione. Tuttavia, gli attacchi CSRF non si limitano a sfruttare i cookie. Ad esempio, anche le applicazioni web che usano la *Basic Authentication* sono vulnerabili. Dopo che un utente accede con la Basic o la Digest Authentication, il browser invia automaticamente le credenziali, fino al termine della sessione.
 
-Nota: In questo contesto, *sessione* fa riferimento alla sessione sul lato client durante i quali l'utente viene autenticato. È indipendente dalla sessioni sul lato server o [sessione middleware](xref:fundamentals/app-state).
+Nota: In questo contesto, *sessione* fa riferimento alla sessione sul lato client durante la quale l'utente risulta essere autenticato. È indipendente dalla sessione lato server o dal [middleware Session](xref:fundamentals/app-state).
 
-Gli utenti possono impedire vulnerabilità CSRF da:
-* Disconnettersi da siti web quando hanno finito di usarli.
+Gli utenti possono proteggersi da attacchi CSRF in questo modo:
+* Effettuando il logout dall'applicazione web quando hanno terminato di usarla;
 * Cancellare periodicamente i cookie del browser.
 
-Tuttavia, le vulnerabilità CSRF sono fondamentalmente un problema con l'app web, non l'utente finale.
+Tuttavia, la vulnerabilità CSRF è un problema cbe riguarda fondamentalmente l'applicazione web, non l'utente finale.
 
-## <a name="how-does-aspnet-core-mvc-address-csrf"></a>Modalità di ASP.NET MVC di base indirizzi CSRF?
+## <a name="how-does-aspnet-core-mvc-address-csrf"></a>ASP.NET Core MVC come affronta il problema CSFR?
 
 > [!WARNING]
 > ASP.NET Core implementa request anti-falsificazione usando il [dello stack di protezione dati di ASP.NET Core](xref:security/data-protection/introduction). La protezione dei dati di ASP.NET Core deve essere configurato per funzionare in una server farm. Vedere [la configurazione di protezione dei dati](xref:security/data-protection/configuration/overview) per ulteriori informazioni.
